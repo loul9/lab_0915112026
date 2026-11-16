@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electro-Lab-3D | Tecnología e Informática</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Three.js y GLTFLoader -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <!-- Fondo Flux Lines -->
+    <canvas id="fluxCanvas"></canvas>
+
+    <!-- Filtro SVG para efecto Gooey -->
+    <svg style="position: absolute; width: 0; height: 0;">
+        <filter id="goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+        </filter>
+    </svg>
+
+    <!-- Pantalla de Bienvenida -->
+    <section id="welcomeScreen" class="welcome-screen">
+        <div class="welcome-content glass-surface">
+            <!-- 📍 REEMPLAZAR: Aquí puedes poner tu imagen SVG llamativa -->
+            <svg class="hero-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="100" cy="100" r="80" fill="none" stroke="#f20089" stroke-width="4" />
+                <path d="M100 40 L100 160 M60 80 L140 80 M60 120 L140 120" stroke="#6a00f4" stroke-width="6" stroke-linecap="round" />
+                <circle cx="100" cy="100" r="20" fill="#e500a4" />
+            </svg>
+            <h1>Electro-Lab-3D</h1>
+            <p>Explora los artefactos cotidianos, sus circuitos y componentes mediante Realidad Aumentada, Virtual y Visión por Computador.</p>
+            <p class="men-reference">Alineado con la Ley 115 de 1994 y Orientaciones Curriculares MEN 2022</p>
+            <button class="gooey-btn" onclick="startApp()">Empezar</button>
+        </div>
+    </section>
+
+    <!-- Interfaz Principal -->
+    <main id="mainInterface" class="hidden">
+        <!-- Encabezado Glass Surface -->
+        <header class="glass-surface header">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f20089" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                <span>Electro-Lab-3D</span>
+            </div>
+            <nav class="gooey-nav">
+                <a href="#inicio" class="active">Inicio</a>
+                <a href="#ar">AR</a>
+                <a href="#vr">VR</a>
+                <a href="#recomendaciones">Recomendaciones</a>
+            </nav>
+        </header>
+
+        <div class="container">
+            <!-- Selector de Artefactos -->
+            <section class="artifact-selector">
+                <button class="artifact-btn active" onclick="loadArtifact('linterna')">🔦 Linterna</button>
+                <button class="artifact-btn" onclick="loadArtifact('timbre')">🔔 Timbre</button>
+                <button class="artifact-btn" onclick="loadArtifact('ventilador')">🌀 Ventilador</button>
+            </section>
+
+            <div class="workspace">
+                <!-- Panel de Control y Piezas -->
+                <section class="control-panel glass-surface">
+                    <h3>Componentes del Artefacto</h3>
+                    <div id="partsList" class="parts-list">
+                        <!-- Se llena dinámicamente con JS -->
+                    </div>
+                    <button id="powerBtn" class="gooey-btn power-btn" onclick="togglePower()">⚡ Encender Artefacto</button>
+                </section>
+
+                <!-- Visor 3D -->
+                <section class="viewer-panel glass-surface">
+                    <div class="viewer-controls">
+                        <button onclick="toggleFullscreen()">⛶ Pantalla Completa</button>
+                        <label>Velocidad Rotación: <input type="range" id="rotSpeed" min="0" max="5" step="0.1" value="1"></label>
+                    </div>
+                    <div id="canvas-container"></div>
+                    <input type="range" id="explodeSlider" min="0" max="100" value="0" class="explode-slider">
+                    <label for="explodeSlider" class="slider-label">Deslizar para separar piezas (Vista Explotada)</label>
+                </section>
+            </div>
+
+            <!-- Tutorial MediaPipe -->
+            <section class="mediapipe-info glass-surface">
+                <h3>🖐️ Interacción con MediaPipe (Visión por Computador)</h3>
+                <div class="tutorial-steps">
+                    <div class="step"><strong>1. Activa tu cámara:</strong> Permite el acceso cuando el navegador lo solicite.</div>
+                    <div class="step"><strong>2. Rotación:</strong> Mueve tu mano abierta de izquierda a derecha para rotar el modelo 3D.</div>
+                    <div class="step"><strong>3. Selección:</strong> Haz un gesto de "pinza" (junta el dedo índice y el pulgar) para seleccionar y resaltar una pieza del artefacto.</div>
+                </div>
+                <video id="input_video" class="hidden"></video>
+                <canvas id="output_canvas" class="mediapipe-canvas"></canvas>
+                <button class="gooey-btn" onclick="startMediaPipe()">Activar Control por Gestos</button>
+            </section>
+
+            <!-- Sección Tinkercad (Opcional) -->
+            <section class="tinkercad-section glass-surface">
+                <h3>🛠️ Laboratorio de Circuitos (Tinkercad)</h3>
+                <p>Simula y arma tus propios circuitos eléctricos aquí. <em>(Nota: Si no carga, es por políticas de seguridad de iframe de Tinkercad. <a href="https://www.tinkercad.com/dashboard" target="_blank">Abrir en nueva pestaña</a>)</em></p>
+                <iframe src="https://www.tinkercad.com/dashboard" title="Tinkercad" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
+            </section>
+
+            <!-- Sección de Quiz -->
+            <section class="quiz-section glass-surface" id="quiz">
+                <h3>📝 Evaluación de Conocimientos (20 Preguntas)</h3>
+                <div id="quiz-container"></div>
+                <div id="quiz-feedback" class="feedback hidden"></div>
+            </section>
+        </div>
+
+        <!-- Pie de Página -->
+        <footer class="glass-surface footer">
+            <h4>Electro-Lab-3D</h4>
+            <p>Programa: <strong>Licenciatura en Tecnología</strong></p>
+            <p>Autores: <strong>Sebastián Mendoza, Daniel Galezo</strong> | Año: <strong>2026</strong></p>
+            <p class="footer-desc">Plataforma educativa interactiva diseñada para la enseñanza de la naturaleza de los artefactos, sus circuitos eléctricos y componentes, fomentando el pensamiento tecnológico y la apropiación de la tecnología según los lineamientos del Ministerio de Educación Nacional de Colombia.</p>
+        </footer>
+    </main>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
